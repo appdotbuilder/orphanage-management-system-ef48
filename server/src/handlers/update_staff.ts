@@ -1,19 +1,51 @@
+import { db } from '../db';
+import { staffTable } from '../db/schema';
 import { type UpdateStaffInput, type Staff } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function updateStaff(input: UpdateStaffInput): Promise<Staff> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating an existing staff member's information.
-    // Should update the updated_at timestamp.
-    // Should ensure email consistency if email is updated.
-    // Admins can update any staff, staff can only update their own record.
-    return Promise.resolve({
-        id: input.id,
-        user_id: 1, // Placeholder user_id
-        name: input.name || 'Existing Name',
-        email: input.email || 'existing@email.com',
-        phone_number: input.phone_number !== undefined ? input.phone_number : null,
-        position: input.position || 'Existing Position',
-        created_at: new Date(),
-        updated_at: new Date()
-    } as Staff);
-}
+export const updateStaff = async (input: UpdateStaffInput): Promise<Staff> => {
+  try {
+    // Verify staff member exists first
+    const existingStaff = await db.select()
+      .from(staffTable)
+      .where(eq(staffTable.id, input.id))
+      .execute();
+
+    if (existingStaff.length === 0) {
+      throw new Error(`Staff member with id ${input.id} not found`);
+    }
+
+    // Build update object only with provided fields
+    const updateData: Partial<typeof staffTable.$inferInsert> = {
+      updated_at: new Date()
+    };
+
+    if (input.name !== undefined) {
+      updateData.name = input.name;
+    }
+
+    if (input.email !== undefined) {
+      updateData.email = input.email;
+    }
+
+    if (input.phone_number !== undefined) {
+      updateData.phone_number = input.phone_number;
+    }
+
+    if (input.position !== undefined) {
+      updateData.position = input.position;
+    }
+
+    // Update staff record
+    const result = await db.update(staffTable)
+      .set(updateData)
+      .where(eq(staffTable.id, input.id))
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Staff update failed:', error);
+    throw error;
+  }
+};

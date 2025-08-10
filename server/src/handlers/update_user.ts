@@ -1,17 +1,49 @@
+import { db } from '../db';
+import { usersTable } from '../db/schema';
 import { type UpdateUserInput, type User } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function updateUser(input: UpdateUserInput): Promise<User> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating an existing user's information.
-    // Should hash new password if provided using bcrypt.
-    // Should update the updated_at timestamp.
-    // Only admins should be able to update users.
-    return Promise.resolve({
-        id: input.id,
-        email: input.email || 'existing@email.com',
-        password_hash: 'hashed_password_placeholder',
-        role: input.role || 'staff',
-        created_at: new Date(),
-        updated_at: new Date()
-    } as User);
-}
+export const updateUser = async (input: UpdateUserInput): Promise<User> => {
+  try {
+    // First, check if the user exists
+    const existingUsers = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.id, input.id))
+      .execute();
+
+    if (existingUsers.length === 0) {
+      throw new Error(`User with id ${input.id} not found`);
+    }
+
+    // Prepare update data
+    const updateData: any = {
+      updated_at: new Date()
+    };
+
+    // Add optional fields only if provided
+    if (input.email !== undefined) {
+      updateData.email = input.email;
+    }
+
+    if (input.role !== undefined) {
+      updateData.role = input.role;
+    }
+
+    // Hash password if provided using Bun's built-in password hashing
+    if (input.password !== undefined) {
+      updateData.password_hash = await Bun.password.hash(input.password);
+    }
+
+    // Update the user
+    const result = await db.update(usersTable)
+      .set(updateData)
+      .where(eq(usersTable.id, input.id))
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('User update failed:', error);
+    throw error;
+  }
+};
